@@ -13,6 +13,8 @@ The code is written in R (`module load R/3.2.3`) and relies on several R package
 
 ## Running the code
 Both versions of the code can be run with the command `sh driver_key.sh`.
+You will probably wish to change the variables `input_file` and `output_dir` in `driver_key.sh`.
+
 
 There are two algorithms called from driver_key.sh:
 1. `univariate_naive_bayes.R`. This is basically RIVER (with a few add-ons to make it more customizable/generalizable)
