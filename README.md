@@ -4,7 +4,7 @@
 ## System Requirements
 The code was developed on MARCC.
 
-The code is written in R (`module load R/3.2.3`) and relies on several R packages that you will need to install:
+The code is written in R (`module load R/3.4.0`) and relies on several R packages that you will need to install:
 1. library(glmnet)
 2. library(methods)
 3. library(stats)
@@ -12,6 +12,14 @@ The code is written in R (`module load R/3.2.3`) and relies on several R package
 5. library(Biobase)
 6. library(pROC)
 7. library(ggplot2)
+8. library(cowplot)
+9. library(sigmoid)
+10. library(Rcpp)
+11. library(RColorBrewer)
+12. library(ggthemes)
+13. library(lbfgs)
+14. library(optimx)
+15. library(numDeriv)
 
 ## Running the code
 Both versions of the code can be run with the command `sh driver_key.sh`.
