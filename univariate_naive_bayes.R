@@ -5,8 +5,6 @@ library(utils)
 library(Biobase)
 library(pROC)
 library(ggplot2)
-library(cowplot)
-library(mvtnorm)
 
 #' Posterior probabilities of FR given G and E.
 #'
@@ -466,9 +464,13 @@ discritize_expression_data <- function(E_tbt, dim, num_bins) {
 }
 
 
+# Train on all non-N2 pairs
+# Used trained model to do N2 pair prediction
 roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc) {
   ## Extract required data
   all_data <- load_data(input_file, 3.3)
+
+  # Load in expression data
   dataInput <- all_data[[1]]
   E_all <- all_data[[2]]
   E_tbt_real_valued <- t(as.matrix(all_data[[2]]))
@@ -583,13 +585,10 @@ roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions,
 
   plot_roc(evaROC, ZscoreThrd, paste0(output_root, "roc_curve_", ZscoreThrd,".pdf"))
 
-  #posterior_file <- paste0(output_root,"posterior.txt")
-  #write.table(emModel$posteriors$posterior, file=posterior_file, row.names=FALSE, col.names=FALSE)
-
 
 }
 
-
+# Initialize multinomial distribution
 initialize_theta <- function(num_bins,dim) {
   theta_outlier <- matrix(1,dim,num_bins)
   theta_inlier <- matrix(1,dim,num_bins)
@@ -619,17 +618,26 @@ input_file = args[1]
 output_root = args[2]
 
 
-pseudoc=100
-dimensions=1 # number of tissues
+pseudoc=100  # hyperparameter for prior on multinomial distribution
+dimensions=1 # number of tissues (just the median.. so only 1)
 
-costs=c(100, 10, 1, .1, .01, 1e-3, 1e-4)
+costs=c(100, 10, 1, .1, .01, 1e-3, 1e-4)  # Grid-space to search for lambda hyperparameters
 verbose=TRUE
-ZscoreThrd = 3.3 # 3.3
-num_bins <- 7
+ZscoreThrd = 3.3 # Really a -log10pvalue threshold
+num_bins <- 7  # Number of dimensions of multinomial distribution
 
+
+# Initialize multinomial distribution
 theta_init <- initialize_theta(num_bins,dimensions) 
 
 
+# Train on all non-N2 pairs
+# Used trained model to do N2 pair prediction
 roc_analysis_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc)
 
+
+
+
+
+# Train on all data. Make nice visualization of posteriors
 full_data_visualization_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init,num_bins, costs, verbose,pseudoc)
