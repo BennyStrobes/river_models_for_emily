@@ -2,6 +2,8 @@
 
 
 ## System Requirements
+The code was developed on MARCC.
+
 The code is written in R (`module load R/3.2.3`) and relies on several R packages that you will need to install:
 1. library(glmnet)
 2. library(methods)
