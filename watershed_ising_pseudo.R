@@ -441,7 +441,7 @@ compute_crf_log_likelihood_lbfgs <- function(x, Feat, posterior, posterior_mu, q
   mu <- 2.0*q - 1.0
 
   log_likelihood <- crf_log_likelihood_helper_pseudo_cpp(intercept, pair_vec, beta, mu, q, posterior_mu,posterior, Feat, T, lambda, lambda_theta_pair)
-  print(round(log_likelihood,digits=22))
+  # print(round(log_likelihood,digits=22))
   return(-log_likelihood)
 }
 
@@ -462,10 +462,10 @@ mle_beta_lbfgs <- function(model_params, Feat) {
   #print(numer_grad)
   #print(grad)
   #print(ll)
-  output <- lbfgs(compute_crf_log_likelihood_lbfgs, gradient_lbfgs, x, Feat=Feat, posterior=model_params$posterior,posterior_mu=model_params$posterior_mu,q=model_params$pseudo_q, mu=model_params$pseudo_mu, pair_length = pair_length, num_feat=num_feat, T = T, lambda=model_params$lambda, lambda_theta_pair=model_params$lambda_theta_pair, N = N, vi_damping_factor=model_params$vi_damping_factor, invisible=0,epsilon=5e-2,m=10)
+  output <- lbfgs(compute_crf_log_likelihood_lbfgs, gradient_lbfgs, x, Feat=Feat, posterior=model_params$posterior,posterior_mu=model_params$posterior_mu,q=model_params$pseudo_q, mu=model_params$pseudo_mu, pair_length = pair_length, num_feat=num_feat, T = T, lambda=model_params$lambda, lambda_theta_pair=model_params$lambda_theta_pair, N = N, vi_damping_factor=model_params$vi_damping_factor, invisible=1,epsilon=5e-2,m=10)
   new_x <- output$par
   if (output$convergence != 0) {
-    print("ERRROOROR IN LBFGS!!!")
+    print("FATAL ERRORRRRRRRRRRR IN LBFGS CONVERGENCE!!!!!!!!!!!!!!!!")
   }
 
 
@@ -577,24 +577,18 @@ compute_observed_data_log_like3 <- function(Feat, Out, model_params_exact) {
 
 integratedEM <- function(Feat, Out, lambda_ideal,
                          phi_init, beta_init, singleton_init, num_bins, costs,pseudoc,
-                         verbose, OutTest1, OutTest2_tbt, FeatTest, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, vi_damping_factor){
+                         verbose, output_root, vi_damping_factor){
 
 
   model_params <- temp_initialization(Feat, Out, phi_init, beta_init, lambda_ideal, singleton_init, vi_damping_factor)
-  prev_expected_log_like <- -1000000000000000000
-  prev_observed_log_like <- -1000000000000000000
   steps <- 1
   maxIter <- 1000  
   converged <- 0
   for (iter in 1:maxIter) {
     if (verbose) {
-      cat(' *** STREAM: EM step ',steps,'\n',sep="")
+      cat(' *** WATERSHED: EM step ',steps,'\n',sep="")
     }
 
-
-
-
-    # model_params_exact <- get_marginal_exact_posteriors(Feat, Out, model_params_exact)
 
     ## E-step:
     ## Compute expected posterior probabilities
@@ -602,13 +596,6 @@ integratedEM <- function(Feat, Out, lambda_ideal,
 
     model_params <- getFuncRvFeat(Feat, model_params)
     model_params <- getFuncRvPosteriors(Out, Feat, model_params)
-
-    #expected_data_log_like <- compute_expected_complete_log_likelihood(Feat, Out, model_params)
-    #cat('    Current expected data log probability after E step: ', expected_data_log_like,'\n',sep='')
-    #observed_data_log_like <- compute_observed_data_log_like3(Feat, Out, model_params)
-    #cat('    Current observed data log probability after E Step: ', observed_data_log_like,'\n',sep='')
-    expected_data_log_like <- compute_expected_complete_log_likelihood(Feat, Out, model_params)
-    cat('    Current expected data log probability after E Step: ', expected_data_log_like,'\n',sep='')
 
 
     if (verbose) {
@@ -629,21 +616,18 @@ integratedEM <- function(Feat, Out, lambda_ideal,
     # Maximum Likelihood estimate (really MAP...) of Beta and Theta
     model_params <- mle_beta_lbfgs(model_params, Feat)
 
-    #model_params <- mle_beta(model_params, Feat)
-    #model_params <- mle_beta_lbfgs(model_params, Feat)
 
+    if (verbose) {
+      cat('M-step: complete','\n',sep='')
+    }
 
-    #model_params_exact <- mle_phi(Out, model_params_exact,pseudoc,num_bins)
-
-    #model_params_exact <- mle_beta_exact(model_params_exact, Feat)
-
-
-    # Compute observed log probability
-
-
+    print('Current theta Pair matrix')
     print(head(model_params$theta_pair))
+    print('Current theta-singleton vector (intercept vector)')
     print(model_params$theta_singleton)
+    print('Current beta vector (coefficient vector')
     print(model_params$beta)
+    print('Current phi matrix (outlier probabilities)')
     print(model_params$phi)
 
 
@@ -662,56 +646,21 @@ integratedEM <- function(Feat, Out, lambda_ideal,
           " *** \n\n", sep="")
     }
 
-    #expected_data_log_like <- compute_expected_complete_log_likelihood(Feat, Out, model_params)
-    #cat('    Current expected data log probability after M step: ', expected_data_log_like,'\n',sep='')
-    #observed_data_log_like <- compute_observed_data_log_like3(Feat, Out, model_params)
-    #cat('    Current observed data log probability after M Step: ', observed_data_log_like,'\n',sep='')
-    expected_data_log_like <- compute_expected_complete_log_likelihood(Feat, Out, model_params)
-    cat('    Current expected data log probability after M Step: ', expected_data_log_like,'\n',sep='')
-
+    if (steps > 2) {
+      converged <-1
+      break
+    }
 
     ## Check convergence
     if ((norm(matrix(model_params$beta) - matrix(beta_old)) < .05 ) &
         (norm(model_params$phi$inlier_component - phi_old$inlier_component) < .05) &
         (norm(model_params$phi$outlier_component - phi_old$outlier_component) < .05) &
         (norm(matrix(model_params$theta_singleton) - matrix(theta_singleton_old)) < .05) &
-        (norm(matrix(model_params$theta_pair) - matrix(theta_pair_old)) < .5)
+        (norm(matrix(model_params$theta_pair) - matrix(theta_pair_old)) < .05)
         ) {
       converged <- 1
       break
     }
-
-    if (abs(prev_expected_log_like - expected_data_log_like) < .5) {
-      converged <- 1
-      break
-    }
-    prev_expected_log_like <- expected_data_log_like
-    #if (abs(prev_observed_log_like - observed_data_log_like) < .5) {
-    #  converged <- 1
-    #  break
-    #}
-    #prev_observed_log_like <- observed_data_log_like
-    dup.post <- testPosteriors_tbt(FeatTest, OutTest1, list(model_params=model_params))
-    RIVER.roc_observed <- tbt_roc(dup.post, OutTest1, OutTest2_tbt, "observed_only")
-    print(RIVER.roc_observed)
-
-    RIVER.roc_inferred <- tbt_roc(dup.post, OutTest1, OutTest2_tbt, "inferred")
-
-    print(RIVER.roc_inferred)
-    write.table(dup.post,paste0(output_root, "test_posterior_",Zscore_initialization_threshold,"_",Zscore_n2_threshold, "_",pseudoc,"_",steps,".txt"),quote=FALSE,sep="\t")
-    write.table(model_params$theta_pair,paste0(output_root, "theta_pair_",Zscore_initialization_threshold,"_",Zscore_n2_threshold, "_",pseudoc,"_",steps,".txt"),quote=FALSE,sep="\t")
-
-     evaROC <-
-      list(RIVER_sens=RIVER.roc_observed$sensitivities,
-          RIVER_spec=RIVER.roc_observed$specificities,
-          RIVER_auc=RIVER.roc_observed$auc[1],
-          GAM_sens=RIVER.roc_inferred$sensitivities,
-          GAM_spec=RIVER.roc_inferred$specificities,
-          GAM_auc=RIVER.roc_inferred$auc[1],
-          pvalue=roc.test(RIVER.roc_observed, RIVER.roc_inferred)$p.value)
-    class(evaROC) <- "eval"
-    plot_roc(evaROC, Zscore_n2_threshold, paste0(output_root, "roc_curve_",Zscore_initialization_threshold,"_",Zscore_n2_threshold, "_",pseudoc,"_",steps,".pdf"))
-
 
 
     steps <- steps + 1
@@ -761,6 +710,50 @@ load_data <- function(input_file, ZscoreThrd=1.5) {
     return(list(dataInput,median_expression_data, tbt_expression_data))
 }
 
+
+load_data_specific_tissues <- function(input_file, ZscoreThrd=1.5,valid_tissues=1:44) {
+
+    expData_full <- read.table(input_file, header=TRUE)
+    valid_columns <- c(1:77,valid_tissues+77,122,123)
+  
+
+    expData <- expData_full[,valid_columns]
+    tbt_expr <- expData[78:(77+length(valid_tissues))]
+    valid_rows <- rowSums(is.na(tbt_expr))!= ncol(tbt_expr)
+    expData <- expData[valid_rows,]
+    tbt_expr <- tbt_expr[valid_rows,]
+
+    median_expr <-apply(tbt_expr,1,median,na.rm=TRUE)
+    expData[,"neg_log10_median_pvalue"] <- median_expr
+
+    Feat <- expData[,3:(ncol(expData)-length(valid_tissues)-2)] # genomic features
+    # sample name as SubjectID:GeneName
+    rownames(Feat) <- paste(expData[,"SubjectID"], ":",
+    expData[,"GeneName"],sep="")
+    Feat <- as.matrix(t(Feat)) # feature x sample
+    # outlier status, N2 pairs
+    pData <-
+        data.frame(Outlier=factor(ifelse(abs(expData[,"neg_log10_median_pvalue"])>=ZscoreThrd,1,0),
+        levels=c(0,1)),
+        N2pair=factor(expData[,"N2pair"],
+        levels=unique(expData[,"N2pair"])))
+    rownames(pData) <-
+        paste(expData[,"SubjectID"],":",expData[,"GeneName"],sep="")
+
+    # descrition of outlier status and N2 pairs
+    metadata <-
+        data.frame(labelDescription=c("Outlier status based on Z-scores",
+                                  "Pairs of samples having same rare variants"),
+               row.names=c("Outlier","N2pair"))
+        phenoData <- new("AnnotatedDataFrame", data=pData, varMetadata=metadata)
+    dataInput <- ExpressionSet(assayData=Feat, phenoData=phenoData)
+    tbt_expression_data <- expData[,(ncol(expData)-length(valid_tissues)-1):(ncol(expData)-2)]
+    median_expression_data <- expData[,"neg_log10_median_pvalue"]
+    return(list(dataInput,median_expression_data, tbt_expression_data))
+}
+
+
+
 plot_roc <- function(evaROC, ZscoreThrd, figure_file_name) {
   pdf(figure_file_name)
   par(mar=c(6.1, 6.1, 4.1, 4.1))
@@ -772,11 +765,11 @@ plot_roc <- function(evaROC, ZscoreThrd, figure_file_name) {
       type="s", col='dodgerblue', lwd=2)
   lines(1-evaROC$GAM_spec, evaROC$GAM_sens, 
       type="s", col='mediumpurple', lwd=2)
-  legend(0.7,0.2,c("w-shed","GAM"), lty=c(1,1), lwd=c(2,2),
+  legend(0.7,0.2,c("w-shed observed","w-shed inferered"), lty=c(1,1), lwd=c(2,2),
        col=c("dodgerblue","mediumpurple"), cex=1.2, 
        pt.cex=1.2, bty="n")
-  title(main=paste("Threshold = ", ZscoreThrd," / AUC: Watershed = ", round(evaROC$RIVER_auc,3), 
-                 ", GAM = ", round(evaROC$GAM_auc,3),sep=""))
+  title(main=paste("Thresh = ", ZscoreThrd," / AUC: W-shed obs = ", round(evaROC$RIVER_auc,3), 
+                 ", W-shed infer = ", round(evaROC$GAM_auc,3),sep=""))
 
   dev.off()
 }
@@ -869,10 +862,11 @@ posterior_probability_historgram <- function(array, output_file) {
   ggsave(histo,file=output_file)
 }
 
-full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, dimensions, phi_init,num_bins, costs, verbose,pseudoc, initialization) {
+full_data_visualization_driver <- function(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init, num_bins, costs, verbose, pseudoc,initialization, vi_damping_factor,valid_tissues) {
     ## Extract required data
     ## Extract required data
-    all_data <- load_data(input_file, ZscoreThrd)
+    all_data <- load_data_specific_tissues(input_file, Zscore_initialization_threshold, valid_tissues)
+    
     dataInput <- all_data[[1]]
     E_all <- all_data[[2]]
 
@@ -910,9 +904,9 @@ full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, 
     }
 
 
-
+    ## Train RIVER on training data
     emModelAll <- integratedEM(FeatAll, OutAll, logisticAllCV$lambda.min,
-              phi_init, beta_init, singleton_init, num_bins, costs, pseudoc, verbose)
+              phi_init, beta_init, singleton_init, num_bins, costs, pseudoc, verbose, output_root, vi_damping_factor)
 
 
     ## Compute P(FR | G, E)
@@ -931,20 +925,20 @@ full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, 
 
 
     # Compare relation between posterior probability and number of observed tissues
-    num_observed_tissues <- apply(OutAll, 1, function(x) length(which(!is.na(x))))
-    temp_matrix <- cbind(postprobs$RIVER_posterior, postprobs$GAM_posterior, E_all, num_observed_tissues)
-    write.table(temp_matrix, file=paste0(output_root,"summarize_results.txt"), quote=FALSE, sep="\t", col.names=FALSE,row.names=FALSE)
+    #num_observed_tissues <- apply(OutAll, 1, function(x) length(which(!is.na(x))))
+    #temp_matrix <- cbind(postprobs$RIVER_posterior, postprobs$GAM_posterior, E_all, num_observed_tissues)
+    #write.table(temp_matrix, file=paste0(output_root,"summarize_results.txt"), quote=FALSE, sep="\t", col.names=FALSE,row.names=FALSE)
 
-    write.table(emModelAll$model_params$theta_pair,file=paste0(output_root,"theta_pair_table.txt"), quote=FALSE,sep="\t",col.names=FALSE,row.names=FALSE)
+    #write.table(emModelAll$model_params$theta_pair,file=paste0(output_root,"theta_pair_table.txt"), quote=FALSE,sep="\t",col.names=FALSE,row.names=FALSE)
 
-    posterior_probability_historgram(as.vector(emModelAll$model_params$posterior), paste0(output_root,"posterior_histogram_", ZscoreThrd,"_",pseudoc,".png"))
+    #posterior_probability_historgram(as.vector(emModelAll$model_params$posterior), paste0(output_root,"posterior_histogram_", ZscoreThrd,"_",pseudoc,".png"))
 
-    posterior_probability_historgram(as.vector(emModelAll$model_params$q), paste0(output_root,"crf_posterior_histogram_", ZscoreThrd,"_",pseudoc,".png"))
+    #posterior_probability_historgram(as.vector(emModelAll$model_params$q), paste0(output_root,"crf_posterior_histogram_", ZscoreThrd,"_",pseudoc,".png"))
 
-    energy_function_visualization(emModelAll$model_params, paste0(output_root,"energy_viz_", ZscoreThrd,"_",pseudoc,".png"))
+    #energy_function_visualization(emModelAll$model_params, paste0(output_root,"energy_viz_", ZscoreThrd,"_",pseudoc,".png"))
 
     data_framer = data.frame(neg_log10_median_pvalue = E_all, GAM_posterior = postprobs$GAM_posterior, posterior = postprobs$RIVER_posterior)
-    scatter_plot_fill(data_framer, emModelAll, paste0(output_root,"scatter_fill_", ZscoreThrd,"_",pseudoc,".png"))
+    scatter_plot_fill(data_framer, emModelAll, paste0(output_root,"scatter_fill_", Zscore_initialization_threshold,"_",pseudoc,".png"))
 }
 
 max_ignore_na <- function(x) ifelse( !all(is.na(x)), max(x, na.rm=T), NA)
@@ -969,76 +963,63 @@ discritize_expression_data <- function(E_tbt, dim, num_bins) {
 
 
 
-roc_analysis_driver <- function(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init, num_bins, costs, verbose, pseudoc,initialization, vi_damping_factor) {
+roc_analysis_driver <- function(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init, num_bins, costs, verbose, pseudoc,initialization, vi_damping_factor,valid_tissues) {
   ## Extract required data
-  all_data <- load_data(input_file, Zscore_initialization_threshold)
+  all_data <- load_data_specific_tissues(input_file, Zscore_initialization_threshold, valid_tissues)
   dataInput <- all_data[[1]]
-  E_all <- all_data[[2]]
-  E_tbt_real_valued <- t(as.matrix(all_data[[3]]))
 
-  E_tbt <- discritize_expression_data(E_tbt_real_valued,dim,num_bins)
+  # Matrix of dimension (numTissues) X Num_samples where each element is -log10-pvalue
+  E_tbt_all_real_valued <- t(as.matrix(all_data[[3]]))
+
+  # Discretized version of E_tbt_all_real_valued
+  E_tbt_all_discrete <- discritize_expression_data(E_tbt_all_real_valued,dim,num_bins)
 
   # all genomic features (G)
-  FeatAll <- t(exprs(dataInput))
-  # all outlier status (E)
-  OutAll <- as.numeric(unlist(dataInput$Outlier))-1
+  Feat_all <- t(exprs(dataInput))
 
-  # G for training models
-  FeatTrng <- t(exprs(dataInput[,is.na(dataInput$N2pair)]))
-  # E for training models
-  OutTrng <- t(E_tbt[,is.na(dataInput$N2pair)])
-  OutTrng_binary <- as.numeric(unlist(dataInput$Outlier[is.na(dataInput$N2pair)]))-1
+  # G for training samples
+  Feat_train <- t(exprs(dataInput[,is.na(dataInput$N2pair)]))
+  # E for training samples
+  E_tbt_train_discrete <- t(E_tbt_all_discrete[,is.na(dataInput$N2pair)])
+  E_xt_train_binary <- as.numeric(unlist(dataInput$Outlier[is.na(dataInput$N2pair)]))-1
 
   # G for test
-  FeatTest <-
+  Feat_test <-
     t(cbind(exprs(dataInput[,!is.na(dataInput$N2pair)])
     [,seq(from=1,to=sum(!is.na(dataInput$N2pair)),by=2)],
     exprs(dataInput[,!is.na(dataInput$N2pair)])
     [,seq(from=2,to=sum(!is.na(dataInput$N2pair)),by=2)]))
 
   # E for test (1st and then 2nd individuals from N2 pairs)
-  OutTest1 <-
-      t(cbind(E_tbt[,!is.na(dataInput$N2pair)]
+  E_tbt_test1_discrete <-
+      t(cbind(E_tbt_all_discrete[,!is.na(dataInput$N2pair)]
       [,seq(from=1,to=sum(!is.na(dataInput$N2pair)),by=2)],
-      E_tbt[,!is.na(dataInput$N2pair)]
+      E_tbt_all_discrete[,!is.na(dataInput$N2pair)]
       [,seq(from=2,to=sum(!is.na(dataInput$N2pair)),by=2)]))
 
   # E for test (2nd and then 1st individuals from N2 pairs)
-  all_data_n2 <- load_data(input_file, Zscore_n2_threshold)
-  dataInput_n2 <- all_data_n2[[1]]
-  OutTest2 <-
-    as.numeric(unlist(
-      c(dataInput_n2$Outlier[!is.na(dataInput_n2$N2pair)]
-      [seq(from=2,to=sum(!is.na(dataInput_n2$N2pair)),by=2)],
-      dataInput_n2$Outlier[!is.na(dataInput_n2$N2pair)]
-      [seq(from=1,to=sum(!is.na(dataInput_n2$N2pair)),by=2)])))-1
-
-
-  OutTest2_tbt_real_valued <- 
-      t(cbind(E_tbt_real_valued[,!is.na(dataInput$N2pair)]
+  E_tbt_test2_real_valued <- 
+      t(cbind(E_tbt_all_real_valued[,!is.na(dataInput$N2pair)]
       [,seq(from=2,to=sum(!is.na(dataInput$N2pair)),by=2)],
-      E_tbt_real_valued[,!is.na(dataInput$N2pair)]
+      E_tbt_all_real_valued[,!is.na(dataInput$N2pair)]
       [,seq(from=1,to=sum(!is.na(dataInput$N2pair)),by=2)]))
 
-  OutTest2_tbt <- (OutTest2_tbt_real_valued > Zscore_n2_threshold)*1.0
-  print(head(OutTest2_tbt))
-  OutTest2_tbt_real_valued_cp <- OutTest2_tbt_real_valued
-  OutTest2_tbt_real_valued_cp[!is.nan(OutTest2_tbt_real_valued_cp)] = 1
-  OutTest2_tbt <- OutTest2_tbt*OutTest2_tbt_real_valued_cp
-  print(head(OutTest2_tbt))
+  E_tbt_test2_binary <- (E_tbt_test2_real_valued > Zscore_n2_threshold)*1.0
 
 
 
   ## Standardization
-  meanFeat <- apply(FeatAll, 2, mean)
-  sdFeat <- apply(FeatAll,2,sd)
-  FeatAll <- scale(FeatAll, center=meanFeat, scale=sdFeat)
-  FeatTrng <- scale(FeatTrng, center=meanFeat, scale=sdFeat)
+  meanFeat <- apply(Feat_all, 2, mean)
+  sdFeat <- apply(Feat_all,2,sd)
+  Feat_all <- scale(Feat_all, center=meanFeat, scale=sdFeat)
+  Feat_train <- scale(Feat_train, center=meanFeat, scale=sdFeat)
+  # Scale test features
+  Feat_test <- scale(Feat_test, center=meanFeat, scale=sdFeat)
 
   ## Search a best lambda from a multivariate logistic regression
   ##         with outlier status with 10 cross-validation
   ## GAM (genomeic annotation model)
-  logisticCV <- cv.glmnet(FeatTrng, as.vector(OutTrng_binary), lambda=costs,
+  logisticCV <- cv.glmnet(Feat_train, as.vector(E_xt_train_binary), lambda=costs,
                           family="binomial", alpha=0, nfolds=10)
   beta_init <- logisticCV$glmnet.fit$beta[,logisticCV$lambda == logisticCV$lambda.min]
   singleton_init <- logisticCV$glmnet.fit$a0[logisticCV$lambda == logisticCV$lambda.min]
@@ -1046,10 +1027,10 @@ roc_analysis_driver <- function(input_file, Zscore_initialization_threshold, Zsc
     cat(' *** best lambda = ',logisticCV$lambda.min,' *** \n\n', sep='')
   }
 
-  ## Compute a P(FR | G) for all data
-  postprobTest <- predict(logisticCV, FeatTest, s="lambda.min", type="response")
+  ## Compute a P(FR | G) for test data
+  postprobTest <- predict(logisticCV, Feat_test, s="lambda.min", type="response")
 
-      # If not performing "smart initializtion", set all parameters to zeros
+    # If not performing "smart initializtion", set all parameters to zeros
   if (initialization == "zeros") {
       beta_init <- numeric(length(beta_init))
       singleton_init <- 0
@@ -1057,48 +1038,35 @@ roc_analysis_driver <- function(input_file, Zscore_initialization_threshold, Zsc
 
 
   ## Train RIVER on training data
-  emModel <- integratedEM(FeatTrng, OutTrng, logisticCV$lambda.min,
-              phi_init, beta_init, singleton_init, num_bins, costs, pseudoc, verbose, OutTest1, OutTest2_tbt, FeatTest, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, vi_damping_factor)
+  emModel <- integratedEM(Feat_train, E_tbt_train_discrete, logisticCV$lambda.min,
+              phi_init, beta_init, singleton_init, num_bins, costs, pseudoc, verbose, output_root, vi_damping_factor)
 
 
 
+  # Calculate tissue-specific posterior probabilities using trained model
+  dup.post <- testPosteriors_tbt(Feat_test, E_tbt_test1_discrete, list(model_params=emModel$model_params))
 
-
-  # ## Generate G data for test data (Revised)
-  FeatTest <- scale(FeatTest, center=meanFeat, scale=sdFeat)
-
-  ## Compute P(FR | G, E)
-  dup.post <- testPosteriors_tbt(FeatTest, OutTest1, emModel)
-
-
-  RIVER.roc_observed <- tbt_roc(dup.post, OutTest1, OutTest2_tbt, "observed_only")
-  RIVER.roc_inferred <- tbt_roc(dup.post, OutTest1, OutTest2_tbt, "inferred")
-
+  # Compute ROC for all (sample, tissue) pairs that have observed expression in N1 and N2
+  RIVER.roc_observed <- tbt_roc(dup.post, E_tbt_test1_discrete, E_tbt_test2_binary, "observed_only")
+  print('tbt ROC on observed points')
   print(RIVER.roc_observed)
+
+  # Compute ROC for all (sample,tissue) pairs that have observed expression in N2
+  RIVER.roc_inferred <- tbt_roc(dup.post, E_tbt_test1_discrete, E_tbt_test2_binary, "inferred")
+  print('tbt ROC on inferred points')
   print(RIVER.roc_inferred)
 
-  ## Check performance of models with N2 pairs
-  # RIVER.roc <- roc(OutTest2, dup.post) # RIVER
-  #GAM.roc <- roc(OutTest2, as.numeric(postprobTest)) # GAM
-
-  #if (verbose) {
-  #  cat('*** AUC (GAM - genomic annotation model): ',round(GAM.roc$auc,3),
-  #    '\n    AUC (RIVER): ',round(RIVER.roc$auc,3),'\n     P-value: ',
-  #    format.pval(roc.test(RIVER.roc, GAM.roc)$p.value,digits=2,eps=0.001),
- #     '***\n\n')
-  #}
-
+  # Plot ROC Curve
   evaROC <-
     list(RIVER_sens=RIVER.roc_observed$sensitivities,
-         RIVER_spec=RIVER.roc_observed$specificities,
-         RIVER_auc=RIVER.roc_observed$auc[1],
-         GAM_sens=RIVER.roc_inferred$sensitivities,
-         GAM_spec=RIVER.roc_inferred$specificities,
-         GAM_auc=RIVER.roc_inferred$auc[1],
-         pvalue=roc.test(RIVER.roc_observed, RIVER.roc_inferred)$p.value)
+          RIVER_spec=RIVER.roc_observed$specificities,
+          RIVER_auc=RIVER.roc_observed$auc[1],
+          GAM_sens=RIVER.roc_inferred$sensitivities,
+          GAM_spec=RIVER.roc_inferred$specificities,
+          GAM_auc=RIVER.roc_inferred$auc[1],
+          pvalue=roc.test(RIVER.roc_observed, RIVER.roc_inferred)$p.value)
   class(evaROC) <- "eval"
   plot_roc(evaROC, Zscore_n2_threshold, paste0(output_root, "roc_curve_",Zscore_initialization_threshold,"_",Zscore_n2_threshold, "_",pseudoc,".pdf"))
-
 }
 
 
@@ -1126,36 +1094,39 @@ initialize_phi<- function(num_bins,dim) {
 }
 
 
+# LOAD IN COMMAND LINE ARGS
 print("Watershed Ising Model :)")
 args = commandArgs(trailingOnly=TRUE)
 input_file = args[1]
 output_root = args[2]
-version = args[3]  # Run "full_data_visualization" or "roc_analysis"
-initialization = args[4]  # How to initialize parameters ("smart_initialization" or "zeros")
-Zscore_n2_threshold = as.numeric(args[5])
-vi_damping_factor = as.numeric(args[6])
 
-print(version)
-print(initialization)
-print(Zscore_n2_threshold)
-print(vi_damping_factor)
 
-pseudoc=100
-dimensions=1 # number of tissues
-
-costs=c(100, 10, 1, .1, .01, 1e-3, 1e-4)
-verbose=TRUE
-ZscoreThrd = 3.3
-num_bins <- 6
+# MODEL PARAMETERS
+# Can change
+valid_tissues = c(1,2)  # Vector list of which tissues to include. 
+                         # c(1,3) means only include 1st (base 1) and 3rd (base 1) tissues
+                         # 1:44 means include all 44 tissues
+Zscore_n2_threshold = 3.3  # -neglog10 pvalue threshold for evaluation
+# Don't change
+initialization = "smart_initialization"  # Don't worry about this
+Zscore_initialization_threshold=3.3  # -log10 pvalue threshold for initialization (should always be 3.3)
+vi_damping_factor = 0.0  # Don't worry about this
+pseudoc=100  # Hyperparameter for categorical likelihood distribution
+dimensions=1 # Don't worry about htis
+costs=c(100, 10, 1, .1, .01, 1e-3, 1e-4)  # Potential lambdas for l2 regularization 
+verbose=TRUE  # Print more stuff
+num_bins <- 6 # How many bins to descretize the data into
 
 phi_init <- initialize_phi(num_bins,dimensions) 
 
-if (version == "full_data_visualization") {
-  full_data_visualization_driver(input_file, ZscoreThrd, output_root, dimensions, phi_init,num_bins, costs, verbose, pseudoc, initialization)
-}
 
-Zscore_initialization_threshold=3.3
-if (version == "roc_analysis") {
-  roc_analysis_driver(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init, num_bins, costs, verbose, pseudoc, initialization, vi_damping_factor)
-}
+full_data_visualization_driver(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init,num_bins, costs, verbose, pseudoc, initialization, vi_damping_factor,valid_tissues)
+
+
+
+
+
+
+roc_analysis_driver(input_file, Zscore_initialization_threshold, Zscore_n2_threshold, output_root, dimensions, phi_init, num_bins, costs, verbose, pseudoc, initialization, vi_damping_factor,valid_tissues)
+
 

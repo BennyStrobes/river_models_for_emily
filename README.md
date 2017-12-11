@@ -28,4 +28,4 @@ You will probably wish to change the variables `input_file` and `output_dir` in 
 
 There are two algorithms called from driver_key.sh:
 1. `univariate_naive_bayes.R`. This is basically RIVER (with a few add-ons to make it more customizable/generalizable)
-2. To-be-added (CRF-type model)
+2. `watershed_ising_pseudo.R`. This is the WATERSHED model. I've added a valid_tissues variable that allows the user to control which tissues to use.

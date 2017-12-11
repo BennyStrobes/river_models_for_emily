@@ -624,7 +624,7 @@ dimensions=1 # number of tissues (just the median.. so only 1)
 costs=c(100, 10, 1, .1, .01, 1e-3, 1e-4)  # Grid-space to search for lambda hyperparameters
 verbose=TRUE
 ZscoreThrd = 3.3 # Really a -log10pvalue threshold
-num_bins <- 7  # Number of dimensions of multinomial distribution
+num_bins <- 6  # Number of dimensions of multinomial distribution
 
 
 # Initialize multinomial distribution

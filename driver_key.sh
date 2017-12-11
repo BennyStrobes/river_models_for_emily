@@ -8,12 +8,11 @@ output_dir="/home-1/bstrobe1@jhu.edu/work/ben/rare_var/rare_splice/modeling/v_sc
 
 
 
-if false; then
 Rscript univariate_naive_bayes.R $input_file $output_dir"univariate_naive_bayes_"
-fi
 
 
 
+Rscript watershed_ising_pseudo.R $input_file $output_dir"crf_type_model_"
 
 
 
