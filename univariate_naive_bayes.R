@@ -393,10 +393,11 @@ scatter_plot_fill <- function(data_framer, emModel, figure_output_file) {
 
 
 
-full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, dimensions, theta_init,num_bins, costs, verbose,pseudoc) {
+full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, dimensions, theta_init,num_bins, costs, verbose,pseudoc,valid_tissues) {
     ## Extract required data
     ## Extract required data
-    all_data <- load_data(input_file, ZscoreThrd)
+    #all_data <- load_data(input_file, ZscoreThrd)
+    all_data <- load_data_specific_tissues(input_file, 3.3, valid_tissues)
     dataInput <- all_data[[1]]
     E_all <- all_data[[2]]
     E_tbt_real_valued <- t(as.matrix(all_data[[2]]))
@@ -420,6 +421,7 @@ full_data_visualization_driver <- function(input_file, ZscoreThrd, output_root, 
 
     ## Compute P(FR=1 | G)
     postporbGAM <- predict(logisticAllCV, FeatAll, s="lambda.min", type="response")
+
     ## Train RIVER with all data for application
     emModelAll <- integratedEM(FeatAll, OutAll, logisticAllCV$lambda.min,
                 logisticAllCV$glmnet.fit, theta_init,
@@ -464,11 +466,15 @@ discritize_expression_data <- function(E_tbt, dim, num_bins) {
 }
 
 
+
+
 # Train on all non-N2 pairs
 # Used trained model to do N2 pair prediction
-roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc) {
+roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc, valid_tissues) {
   ## Extract required data
-  all_data <- load_data(input_file, 3.3)
+  #all_data2 <- load_data(input_file, 3.3)
+
+  all_data <- load_data_specific_tissues(input_file, 3.3, valid_tissues)
 
   # Load in expression data
   dataInput <- all_data[[1]]
@@ -547,7 +553,9 @@ roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions,
   ## Compute P(FR | G, E)
   dup.post <- testPosteriors(FeatTest, OutTest1, emModel)
 
-  all_data <- load_data(input_file, ZscoreThrd)
+  all_data <- load_data_specific_tissues(input_file, ZscoreThrd, valid_tissues)
+
+  # Load in expression data
   dataInput <- all_data[[1]]
 
 
@@ -588,6 +596,50 @@ roc_analysis_driver <- function(input_file, ZscoreThrd, output_root, dimensions,
 
 }
 
+
+load_data_specific_tissues <- function(input_file, ZscoreThrd=1.5,valid_tissues=1:44) {
+
+    expData_full <- read.table(input_file, header=TRUE)
+    valid_columns <- c(1:77,valid_tissues+77,122,123)
+  
+
+    expData <- expData_full[,valid_columns]
+    
+    tbt_expr <- as.matrix(expData[78:(77+length(valid_tissues))])
+    valid_rows <- rowSums(is.na(tbt_expr))!= ncol(tbt_expr)
+    expData <- expData[valid_rows,]
+    tbt_expr <- as.matrix(tbt_expr[valid_rows,])
+
+    median_expr <-apply(tbt_expr,1,median,na.rm=TRUE)
+    expData[,"neg_log10_median_pvalue"] <- median_expr
+
+    Feat <- expData[,3:(ncol(expData)-length(valid_tissues)-2)] # genomic features
+    # sample name as SubjectID:GeneName
+    rownames(Feat) <- paste(expData[,"SubjectID"], ":",
+    expData[,"GeneName"],sep="")
+    Feat <- as.matrix(t(Feat)) # feature x sample
+    # outlier status, N2 pairs
+    pData <-
+        data.frame(Outlier=factor(ifelse(abs(expData[,"neg_log10_median_pvalue"])>=ZscoreThrd,1,0),
+        levels=c(0,1)),
+        N2pair=factor(expData[,"N2pair"],
+        levels=unique(expData[,"N2pair"])))
+    rownames(pData) <-
+        paste(expData[,"SubjectID"],":",expData[,"GeneName"],sep="")
+
+    # descrition of outlier status and N2 pairs
+    metadata <-
+        data.frame(labelDescription=c("Outlier status based on Z-scores",
+                                  "Pairs of samples having same rare variants"),
+               row.names=c("Outlier","N2pair"))
+        phenoData <- new("AnnotatedDataFrame", data=pData, varMetadata=metadata)
+    dataInput <- ExpressionSet(assayData=Feat, phenoData=phenoData)
+    tbt_expression_data <- expData[,(ncol(expData)-length(valid_tissues)-1):(ncol(expData)-2)]
+    median_expression_data <- expData[,"neg_log10_median_pvalue"]
+    return(list(dataInput,median_expression_data, tbt_expression_data))
+}
+
+
 # Initialize multinomial distribution
 initialize_theta <- function(num_bins,dim) {
   theta_outlier <- matrix(1,dim,num_bins)
@@ -598,7 +650,6 @@ initialize_theta <- function(num_bins,dim) {
   theta_inlier[,4] = .05
   theta_inlier[,5] = .05
   theta_inlier[,6] = .05
-  theta_inlier[,7] = .05
 
   theta_outlier[,1] = .05
   theta_outlier[,2] = .05
@@ -606,7 +657,6 @@ initialize_theta <- function(num_bins,dim) {
   theta_outlier[,4] = .05
   theta_outlier[,5] = .1
   theta_outlier[,6] = .3
-  theta_outlier[,7] = .4
   theta_init <- list(inlier_component = theta_inlier, outlier_component = theta_outlier)
 
 }
@@ -617,6 +667,8 @@ args = commandArgs(trailingOnly=TRUE)
 input_file = args[1]
 output_root = args[2]
 
+
+valid_tissues <- c(1)
 
 pseudoc=100  # hyperparameter for prior on multinomial distribution
 dimensions=1 # number of tissues (just the median.. so only 1)
@@ -630,14 +682,13 @@ num_bins <- 6  # Number of dimensions of multinomial distribution
 # Initialize multinomial distribution
 theta_init <- initialize_theta(num_bins,dimensions) 
 
-
 # Train on all non-N2 pairs
 # Used trained model to do N2 pair prediction
-roc_analysis_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc)
+roc_analysis_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init, num_bins, costs, verbose, pseudoc, valid_tissues)
 
 
 
 
 
 # Train on all data. Make nice visualization of posteriors
-full_data_visualization_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init,num_bins, costs, verbose,pseudoc)
+full_data_visualization_driver(input_file, ZscoreThrd, output_root, dimensions, theta_init,num_bins, costs, verbose,pseudoc, valid_tissues)
