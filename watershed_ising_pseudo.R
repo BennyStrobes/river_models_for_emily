@@ -646,17 +646,13 @@ integratedEM <- function(Feat, Out, lambda_ideal,
           " *** \n\n", sep="")
     }
 
-    if (steps > 2) {
-      converged <-1
-      break
-    }
 
     ## Check convergence
-    if ((norm(matrix(model_params$beta) - matrix(beta_old)) < .05 ) &
-        (norm(model_params$phi$inlier_component - phi_old$inlier_component) < .05) &
-        (norm(model_params$phi$outlier_component - phi_old$outlier_component) < .05) &
-        (norm(matrix(model_params$theta_singleton) - matrix(theta_singleton_old)) < .05) &
-        (norm(matrix(model_params$theta_pair) - matrix(theta_pair_old)) < .05)
+    if ((norm(matrix(model_params$beta) - matrix(beta_old)) < .01 ) &
+        (norm(model_params$phi$inlier_component - phi_old$inlier_component) < .01) &
+        (norm(model_params$phi$outlier_component - phi_old$outlier_component) < .01) &
+        (norm(matrix(model_params$theta_singleton) - matrix(theta_singleton_old)) < .01) &
+        (norm(matrix(model_params$theta_pair) - matrix(theta_pair_old)) < .01)
         ) {
       converged <- 1
       break
